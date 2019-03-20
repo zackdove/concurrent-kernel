@@ -76,6 +76,7 @@ void hilevel_handler_rst( ctx_t* ctx              ) {
   pcb[ 0 ].ctx.cpsr = 0x50;
   pcb[ 0 ].ctx.pc   = ( uint32_t )( &main_P3 );
   pcb[ 0 ].ctx.sp   = ( uint32_t )( &tos_P3  );
+  pcb[ 0 ].priority = 6;
 
   memset( &pcb[ 1 ], 0, sizeof( pcb_t ) );     // initialise 1-st PCB = P_4
   pcb[ 1 ].pid      = 4;
@@ -83,6 +84,7 @@ void hilevel_handler_rst( ctx_t* ctx              ) {
   pcb[ 1 ].ctx.cpsr = 0x50;
   pcb[ 1 ].ctx.pc   = ( uint32_t )( &main_P4 );
   pcb[ 1 ].ctx.sp   = ( uint32_t )( &tos_P4  );
+  pcb[ 0 ].priority = 6;
 
   memset( &pcb[ 2 ], 0, sizeof( pcb_t ) );     // initialise 1-st PCB = P_5
   pcb[ 2 ].pid      = 5;
@@ -90,6 +92,7 @@ void hilevel_handler_rst( ctx_t* ctx              ) {
   pcb[ 2 ].ctx.cpsr = 0x50;
   pcb[ 2 ].ctx.pc   = ( uint32_t )( &main_P5 );
   pcb[ 2 ].ctx.sp   = ( uint32_t )( &tos_P5  );
+  pcb[ 0 ].priority = 10;
 
   /* Once the PCBs are initialised, we arbitrarily select the one in the 0-th
    * PCB to be executed: there is no need to preserve the execution context,
