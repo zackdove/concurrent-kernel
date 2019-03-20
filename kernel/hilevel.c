@@ -33,6 +33,7 @@ void dispatch( ctx_t* ctx, pcb_t* prev, pcb_t* next ) {
   return;
 }
 
+//Round robin
 void schedule( ctx_t* ctx ) {
   if     ( current->pid == pcb[ 0 ].pid ) {
     dispatch( ctx, &pcb[ 0 ], &pcb[ 1 ] );      // context switch P_3 -> P_4
@@ -53,6 +54,35 @@ void schedule( ctx_t* ctx ) {
   }
   return;
 }
+
+int getCurrentIndex(){
+  for (int i = 0; i < 3; i++){
+    if (current->pid == pcb[i].pid){
+      return i;
+    }
+  }
+}
+
+//Priority queue schedule
+void priority_queue_schedule( ctx_t* ctx ) {
+  int highest_priority = 0;
+  int highest_priority_pid = 0;
+  int highest_priority_index = 0;
+  for (int i = 0; i < 3; i++){
+    if ( pcb[i].priority > highest_priority ) {
+      highest_priority = pcb[i].priority;
+      highest_priority_pid = pcb[i].pid;
+    }
+  }
+  if (current->priority  < highest_priority ){
+    int currentIndex = getCurrentIndex;
+    dispatch(ctx, &pcb[currentIndex], &pcb[highest_priority_index]);
+    pcb[currentIndex].status = STATUS_READY;
+    pcb[highest_priority_index].status = STATUS_EXECUTING;
+  }
+  return;
+}
+
 
 extern void     main_P3();
 extern uint32_t tos_P3;
@@ -84,7 +114,7 @@ void hilevel_handler_rst( ctx_t* ctx              ) {
   pcb[ 1 ].ctx.cpsr = 0x50;
   pcb[ 1 ].ctx.pc   = ( uint32_t )( &main_P4 );
   pcb[ 1 ].ctx.sp   = ( uint32_t )( &tos_P4  );
-  pcb[ 0 ].priority = 6;
+  pcb[ 1 ].priority = 6;
 
   memset( &pcb[ 2 ], 0, sizeof( pcb_t ) );     // initialise 1-st PCB = P_5
   pcb[ 2 ].pid      = 5;
@@ -92,7 +122,7 @@ void hilevel_handler_rst( ctx_t* ctx              ) {
   pcb[ 2 ].ctx.cpsr = 0x50;
   pcb[ 2 ].ctx.pc   = ( uint32_t )( &main_P5 );
   pcb[ 2 ].ctx.sp   = ( uint32_t )( &tos_P5  );
-  pcb[ 0 ].priority = 10;
+  pcb[ 2 ].priority = 10;
 
   /* Once the PCBs are initialised, we arbitrarily select the one in the 0-th
    * PCB to be executed: there is no need to preserve the execution context,
