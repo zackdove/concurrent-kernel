@@ -61,6 +61,7 @@ int getCurrentIndex(){
       return i;
     }
   }
+  return 0;
 }
 
 //Priority queue schedule
@@ -75,7 +76,7 @@ void priority_queue_schedule( ctx_t* ctx ) {
     }
   }
   if (current->priority  < highest_priority ){
-    int currentIndex = getCurrentIndex;
+    int currentIndex = *getCurrentIndex;
     dispatch(ctx, &pcb[currentIndex], &pcb[highest_priority_index]);
     pcb[currentIndex].status = STATUS_READY;
     pcb[highest_priority_index].status = STATUS_EXECUTING;
