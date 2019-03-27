@@ -56,27 +56,32 @@ void schedule( ctx_t* ctx ) {
 }
 
 int getCurrentIndex(){
-  for (int i = 0; i < 3; i++){
-    if (current->pid == pcb[i].pid){
-      return i;
-    }
-  }
-  return 0;
+  return (current->pid - 3);
+}
+
+int numberOfProcesses(){
+  return (sizeof(pcb) / sizeof(pcb[0]));
 }
 
 //Priority queue schedule
 void priority_queue_schedule( ctx_t* ctx ) {
   int highest_priority = 0;
-  int highest_priority_pid = 0;
   int highest_priority_index = 0;
-  for (int i = 0; i < 3; i++){
+  int currentIndex = getCurrentIndex();
+  for (int i = 0; i < numberOfProcesses(); i++){
     if ( pcb[i].priority > highest_priority ) {
       highest_priority = pcb[i].priority;
-      highest_priority_pid = pcb[i].pid;
+      highest_priority_index = i;
+    }
+    //Age the non-current processes
+    if (getCurrentIndex() != i){
+      pcb[i].priority += 1;
     }
   }
-  if (current->priority  < highest_priority ){
-    int currentIndex = *getCurrentIndex;
+  if ( highest_priority > current->priority ){
+    //Reset the age
+    pcb[highest_priority_index].priority = pcb[highest_priority_index].base_priority;
+    //Swap to next process
     dispatch(ctx, &pcb[currentIndex], &pcb[highest_priority_index]);
     pcb[currentIndex].status = STATUS_READY;
     pcb[highest_priority_index].status = STATUS_EXECUTING;
@@ -107,7 +112,8 @@ void hilevel_handler_rst( ctx_t* ctx              ) {
   pcb[ 0 ].ctx.cpsr = 0x50;
   pcb[ 0 ].ctx.pc   = ( uint32_t )( &main_P3 );
   pcb[ 0 ].ctx.sp   = ( uint32_t )( &tos_P3  );
-  pcb[ 0 ].priority = 6;
+  pcb[ 0 ].base_priority = 1;
+  pcb[ 0 ].priority = 1;
 
   memset( &pcb[ 1 ], 0, sizeof( pcb_t ) );     // initialise 1-st PCB = P_4
   pcb[ 1 ].pid      = 4;
@@ -115,7 +121,8 @@ void hilevel_handler_rst( ctx_t* ctx              ) {
   pcb[ 1 ].ctx.cpsr = 0x50;
   pcb[ 1 ].ctx.pc   = ( uint32_t )( &main_P4 );
   pcb[ 1 ].ctx.sp   = ( uint32_t )( &tos_P4  );
-  pcb[ 1 ].priority = 6;
+  pcb[ 1 ].base_priority = 4;
+  pcb[ 1 ].priority = 4;
 
   memset( &pcb[ 2 ], 0, sizeof( pcb_t ) );     // initialise 1-st PCB = P_5
   pcb[ 2 ].pid      = 5;
@@ -123,7 +130,8 @@ void hilevel_handler_rst( ctx_t* ctx              ) {
   pcb[ 2 ].ctx.cpsr = 0x50;
   pcb[ 2 ].ctx.pc   = ( uint32_t )( &main_P5 );
   pcb[ 2 ].ctx.sp   = ( uint32_t )( &tos_P5  );
-  pcb[ 2 ].priority = 10;
+  pcb[ 2 ].base_priority = 7;
+  pcb[ 2 ].priority = 7;
 
   /* Once the PCBs are initialised, we arbitrarily select the one in the 0-th
    * PCB to be executed: there is no need to preserve the execution context,
@@ -157,7 +165,7 @@ void hilevel_handler_irq(ctx_t* ctx) {
   // Step 4: handle the interrupt, then clear (or reset) the source.
 
   if( id == GIC_SOURCE_TIMER0 ) {
-    schedule( ctx ); TIMER0->Timer1IntClr = 0x01;
+    priority_queue_schedule( ctx ); TIMER0->Timer1IntClr = 0x01;
   }
 
   // Step 5: write the interrupt identifier to signal we're done.
