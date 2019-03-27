@@ -97,8 +97,68 @@ extern uint32_t tos_P4;
 extern void     main_P5();
 extern uint32_t tos_P5;
 
+void hilevel_handler_rst_original( ctx_t* ctx              ) {
+  /* Initialise three PCBs, representing user processes stemming from execution
+   * of two user programs.  Note in each case that
+   *
+   * - the CPSR value of 0x50 means the processor is switched into USR mode,
+   *   with IRQ interrupts enabled, and
+   * - the PC and SP values matche the entry point and top of stack.
+   */
+
+  memset( &pcb[ 0 ], 0, sizeof( pcb_t ) );     // initialise 0-th PCB = P_3
+  pcb[ 0 ].pid      = 3;
+  pcb[ 0 ].status   = STATUS_CREATED;
+  pcb[ 0 ].ctx.cpsr = 0x50;
+  pcb[ 0 ].ctx.pc   = ( uint32_t )( &main_P3 );
+  pcb[ 0 ].ctx.sp   = ( uint32_t )( &tos_P3  );
+  pcb[ 0 ].base_priority = 1;
+  pcb[ 0 ].priority = 1;
+
+  memset( &pcb[ 1 ], 0, sizeof( pcb_t ) );     // initialise 1-st PCB = P_4
+  pcb[ 1 ].pid      = 4;
+  pcb[ 1 ].status   = STATUS_CREATED;
+  pcb[ 1 ].ctx.cpsr = 0x50;
+  pcb[ 1 ].ctx.pc   = ( uint32_t )( &main_P4 );
+  pcb[ 1 ].ctx.sp   = ( uint32_t )( &tos_P4  );
+  pcb[ 1 ].base_priority = 4;
+  pcb[ 1 ].priority = 4;
+
+  memset( &pcb[ 2 ], 0, sizeof( pcb_t ) );     // initialise 1-st PCB = P_5
+  pcb[ 2 ].pid      = 5;
+  pcb[ 2 ].status   = STATUS_CREATED;
+  pcb[ 2 ].ctx.cpsr = 0x50;
+  pcb[ 2 ].ctx.pc   = ( uint32_t )( &main_P5 );
+  pcb[ 2 ].ctx.sp   = ( uint32_t )( &tos_P5  );
+  pcb[ 2 ].base_priority = 7;
+  pcb[ 2 ].priority = 7;
+
+  /* Once the PCBs are initialised, we arbitrarily select the one in the 0-th
+   * PCB to be executed: there is no need to preserve the execution context,
+   * since it is is invalid on reset (i.e., no process will previously have
+   * been executing).
+   */
+
+
+  TIMER0->Timer1Load  = 0x00100000; // select period = 2^20 ticks ~= 1 sec
+  TIMER0->Timer1Ctrl  = 0x00000002; // select 32-bit   timer
+  TIMER0->Timer1Ctrl |= 0x00000040; // select periodic timer
+  TIMER0->Timer1Ctrl |= 0x00000020; // enable          timer interrupt
+  TIMER0->Timer1Ctrl |= 0x00000080; // enable          timer
+
+  GICC0->PMR          = 0x000000F0; // unmask all            interrupts
+  GICD0->ISENABLER1  |= 0x00000010; // enable timer          interrupt
+  GICC0->CTLR         = 0x00000001; // enable GIC interface
+  GICD0->CTLR         = 0x00000001; // enable GIC distributor
+
+  dispatch( ctx, NULL, &pcb[ 0 ] );
+  int_enable_irq();
+
+  return;
+}
+
 void hilevel_handler_rst( ctx_t* ctx              ) {
-  /* Initialise two PCBs, representing user processes stemming from execution
+  /* Initialise three PCBs, representing user processes stemming from execution
    * of two user programs.  Note in each case that
    *
    * - the CPSR value of 0x50 means the processor is switched into USR mode,
