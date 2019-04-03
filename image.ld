@@ -31,4 +31,14 @@ SECTIONS {
   /* allocate stack for P5           */
   .       = . + 0x00001000;
   tos_P5 = .;
+  
+  /*allocate stack for (32) processes */
+  .       = . + (0x00001000 *32);
+  tos_process_stack = .;
+  
+  /*allocate stack for console */
+  .       = . + 0x00001000;
+  tos_console = .;
+  
+  
 }
