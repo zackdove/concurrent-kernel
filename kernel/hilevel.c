@@ -218,6 +218,10 @@ pcb_t* get_empty_pcb(){
 	}
 }
 
+void terminate_process(pcb_t* process, ctx_t* ctx){
+	
+}
+
 void write(ctx_t* ctx){
 	int   fd = ( int   )( ctx->gpr[ 0 ] );
       char*  x = ( char* )( ctx->gpr[ 1 ] );
@@ -252,6 +256,14 @@ void fork(ctx){
 	child->ctx.sp = get_stack_address_for_process(child->pid) - get_stack_address_for_process(current->pid) + ctx->sp;
 	//Copy accross stack
 	memcpy((void*)(child->ctx.sp), (void*) (ctx->sp), stack_offset);
+	//Return 0 to child
+	child->ctx.gpr[0] = 0; 
+	//Return child PID to parent
+	ctx->gpr[0] = child->pid;
+}
+
+void exit(ctx_t* ctx){
+	terminate_process(current, ctx);
 }
 
 void hilevel_handler_svc( ctx_t* ctx, uint32_t id ) {
@@ -279,9 +291,10 @@ void hilevel_handler_svc( ctx_t* ctx, uint32_t id ) {
 		fork(ctx);
 		break;
     }
-
-  
-
+	case 0x04:{ //0x04 = exit
+		exit(ctx);
+		break;
+	}
   default   : { // 0x?? => unknown/unsupported
     break;
   }
