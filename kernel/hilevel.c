@@ -168,7 +168,7 @@ void hilevel_handler_rst( ctx_t* ctx              ) {
     pcb[ i ].pid      = i;
     pcb[ i ].status   = STATUS_TERMINATED;
     pcb[ i ].ctx.cpsr = 0x50;
-    pcb[ i ].ctx.pc   = ( uint32_t )( &main_P5 ); //Need to change this and below
+    pcb[ i ].ctx.pc   = ( uint32_t )( &main_P5 ); //WHATTHEHELLISTHIS
     pcb[ i ].ctx.sp   = ( uint32_t )( get_stack_address_for_process(i)  );
     pcb[ i ].base_priority = 0;
     pcb[ i ].priority = 0;
@@ -210,7 +210,49 @@ void hilevel_handler_irq(ctx_t* ctx) {
 
 }
 
-void 
+pcb_t* get_empty_pcb(){
+	for (int i = 0; i < maxProcesses; i++){
+		if (pcb[i].status == STATUS_TERMINATED) {
+			return &pcb[i];
+		}
+	}
+}
+
+void write(ctx_t* ctx){
+	int   fd = ( int   )( ctx->gpr[ 0 ] );
+      char*  x = ( char* )( ctx->gpr[ 1 ] );
+      int    n = ( int   )( ctx->gpr[ 2 ] );
+
+      for( int i = 0; i < n; i++ ) {
+        PL011_putc( UART0, *x++, true );
+      }
+
+      ctx->gpr[ 0 ] = n;
+}
+
+void read(ctx){
+	int   fd = ( int   )( ctx->gpr[ 0 ] );
+      char*  x = ( char* )( ctx->gpr[ 1 ] );
+      int    n = ( int   )( ctx->gpr[ 2 ] );
+
+      for( int i = 0; i < n; i++ ) {
+        x[i] = PL011_getc(UART0, true);
+      }
+
+      ctx->gpr[ 0 ] = n;
+}
+
+void fork(ctx){
+	pcb_t* child = get_empty_pcb(); //add check for no empty???
+	memcpy( &child->ctx, ctx, sizeof( ctx_t ) ); //Copy current context into child
+	child->status = STATUS_READY;
+	child->base_priority = 1;
+	child->priority = 1;
+	//Put stack pointer into the child stack space, taking into account how far 'in' the pointer is
+	child->ctx.sp = get_stack_address_for_process(child->pid) - get_stack_address_for_process(current->pid) + ctx->sp;
+	//Copy accross stack
+	memcpy((void*)(child->ctx.sp), (void*) (ctx->sp), stack_offset);
+}
 
 void hilevel_handler_svc( ctx_t* ctx, uint32_t id ) {
   /* Based on the identifier (i.e., the immediate operand) extracted from the
@@ -220,46 +262,23 @@ void hilevel_handler_svc( ctx_t* ctx, uint32_t id ) {
   * - perform whatever is appropriate for this system call, then
   * - write any return value back to preserved usr mode registers.
   */
-
   switch( id ) {
     case 0x00 : { // 0x00 => yield()
       schedule( ctx );
-
       break;
     }
-
     case 0x01 : { // 0x01 => write( fd, x, n )
-      int   fd = ( int   )( ctx->gpr[ 0 ] );
-      char*  x = ( char* )( ctx->gpr[ 1 ] );
-      int    n = ( int   )( ctx->gpr[ 2 ] );
-
-      for( int i = 0; i < n; i++ ) {
-        PL011_putc( UART0, *x++, true );
-      }
-
-      ctx->gpr[ 0 ] = n;
-
+      write(ctx);
       break;
     }
-
     case 0x02 :{ // 0x02 => read( fd, x, n )
-      int   fd = ( int   )( ctx->gpr[ 0 ] );
-      char*  x = ( char* )( ctx->gpr[ 1 ] );
-      int    n = ( int   )( ctx->gpr[ 2 ] );
-
-      for( int i = 0; i < n; i++ ) {
-        x[i] = PL011_getc(UART0, true);
-      }
-
-      ctx->gpr[ 0 ] = n;
-
+      read(ctx);
       break;
 	}
-
-//     case 0x03:{ // 0x03 = fork(parent, child)
-//       pcb_t* parent = current;
-//       pcb_t* child = 
-//     }
+    case 0x03:{ // 0x03 = fork(parent, child)
+		fork(ctx);
+		break;
+    }
 
   
 
