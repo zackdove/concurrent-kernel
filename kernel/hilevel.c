@@ -19,7 +19,7 @@ int process_size_stack_offset = 0x1000;
 
 void dispatch( ctx_t* ctx, pcb_t* prev, pcb_t* next ) {
     char prev_pid = '?', next_pid = '?';
-    
+
     if( NULL != prev ) {
         memcpy( &prev->ctx, ctx, sizeof( ctx_t ) ); // preserve execution context of P_{prev}
         prev_pid = '0' + prev->pid;
@@ -28,16 +28,16 @@ void dispatch( ctx_t* ctx, pcb_t* prev, pcb_t* next ) {
         memcpy( ctx, &next->ctx, sizeof( ctx_t ) ); // restore  execution context of P_{next}
         next_pid = '0' + next->pid;
     }
-    
+
     PL011_putc( UART0, '[',      true );
     PL011_putc( UART0, prev_pid, true );
     PL011_putc( UART0, '-',      true );
     PL011_putc( UART0, '>',      true );
     PL011_putc( UART0, next_pid, true );
     PL011_putc( UART0, ']',      true );
-    
+
     current = next;                             // update   executing index   to P_{next}
-    prev->status = STATUS_READY;
+    if (prev->status == STATUS_EXECUTING){ prev->status = STATUS_READY; }
     next->status = STATUS_EXECUTING;
     return;
 }
@@ -46,22 +46,22 @@ void dispatch( ctx_t* ctx, pcb_t* prev, pcb_t* next ) {
 void round_robin_schedule( ctx_t* ctx ) {
     if     ( current->pid == pcb[ 0 ].pid ) {
         dispatch( ctx, &pcb[ 0 ], &pcb[ 1 ] );      // context switch P_3 -> P_4
-        
+
         pcb[ 0 ].status = STATUS_READY;             // update   execution status  of P_3
         pcb[ 1 ].status = STATUS_EXECUTING;         // update   execution status  of P_4
     }
     else if( current->pid == pcb[ 1 ].pid ) {
         dispatch( ctx, &pcb[ 1 ], &pcb[ 2 ] );      // context switch P_4 -> P_5
-        
+
         pcb[ 1 ].status = STATUS_READY;             // update   execution status  of P_4
         pcb[ 2 ].status = STATUS_EXECUTING;         // update   execution status  of P_5
     } else if ( current->pid == pcb[2].pid){
         dispatch( ctx, &pcb[2], &pcb[0]);           // context switch P_5 -> P_3
-        
+
         pcb[ 2 ].status = STATUS_READY;             // update   execution status  of P_5
         pcb[ 0 ].status = STATUS_EXECUTING;         // update   execution status  of P_3
     }
-    
+
     return;
 }
 
@@ -119,7 +119,7 @@ uint32_t get_stack_address_for_process(pid_t pid){
 
 
 void hilevel_handler_rst( ctx_t* ctx              ) {
-    
+
     // Initliase console process
     memset( &pcb[ 0 ], 0, sizeof( pcb_t ) );
     pcb[ 0 ].pid      = 0;
@@ -129,8 +129,8 @@ void hilevel_handler_rst( ctx_t* ctx              ) {
     pcb[ 0 ].ctx.sp   = ( uint32_t )( &tos_process_stack  );
     pcb[ 0 ].base_priority = 7;
     pcb[ 0 ].priority = 7;
-    
-    
+
+
     //Initliase the remaining empty/blank pcbs
     for (int i = 1; i < maxProcesses; i ++){
         memset( &pcb[ i ], 0, sizeof( pcb_t ) );     // initialise ith PCB = P_i
@@ -142,44 +142,44 @@ void hilevel_handler_rst( ctx_t* ctx              ) {
         pcb[ i ].base_priority = 0;
         pcb[ i ].priority = 0;
     }
-    
+
     //Initalise timer
     TIMER0->Timer1Load  = 0x00100000; // select period = 2^20 ticks ~= 1 sec
     TIMER0->Timer1Ctrl  = 0x00000002; // select 32-bit   timer
     TIMER0->Timer1Ctrl |= 0x00000040; // select periodic timer
     TIMER0->Timer1Ctrl |= 0x00000020; // enable          timer interrupt
     TIMER0->Timer1Ctrl |= 0x00000080; // enable          timer
-    
+
     //Initalise the GIC (interupt handler)
     GICC0->PMR          = 0x000000F0; // unmask all            interrupts
     GICD0->ISENABLER1  |= 0x00000010; // enable timer          interrupt
     GICC0->CTLR         = 0x00000001; // enable GIC interface
     GICD0->CTLR         = 0x00000001; // enable GIC distributor
-    
+
     //Dispatch/execute the console
     dispatch( ctx, NULL, &pcb[ 0 ] );
     int_enable_irq();
-    
+
     return;
 }
 
 void hilevel_handler_irq(ctx_t* ctx) {
     // Step 2: read  the interrupt identifier so we know the source.
-    
+
     uint32_t id = GICC0->IAR;
-    
+
     // Step 4: handle the interrupt, then clear (or reset) the source.
-    
+
     if( id == GIC_SOURCE_TIMER0 ) {
         priority_queue_schedule( ctx ); TIMER0->Timer1IntClr = 0x01;
     }
-    
+
     // Step 5: write the interrupt identifier to signal we're done.
-    
+
     GICC0->EOIR = id;
-    
+
     return;
-    
+
 }
 
 pcb_t* get_empty_pcb(){
@@ -193,6 +193,8 @@ pcb_t* get_empty_pcb(){
 
 void terminate_process(pcb_t* process, ctx_t* ctx){
     process->status = STATUS_TERMINATED;
+    //Set EXIT_SUCCESS to be zero to inducate success
+    ctx->gpr[0] = 0;
     //Since the current program is now terminated, we need to run another by calling the scheduler
     priority_queue_schedule(ctx);
 }
@@ -210,11 +212,11 @@ void sys_write(ctx_t* ctx){
     int   fd = ( int   )( ctx->gpr[ 0 ] );
     char*  x = ( char* )( ctx->gpr[ 1 ] );
     int    n = ( int   )( ctx->gpr[ 2 ] );
-    
+
     for( int i = 0; i < n; i++ ) {
         PL011_putc( UART0, *x++, true );
     }
-    
+
     ctx->gpr[ 0 ] = n;
 }
 
@@ -222,11 +224,11 @@ void sys_read(ctx_t* ctx){
     int   fd = ( int   )( ctx->gpr[ 0 ] );
     char*  x = ( char* )( ctx->gpr[ 1 ] );
     int    n = ( int   )( ctx->gpr[ 2 ] );
-    
+
     for( int i = 0; i < n; i++ ) {
         x[i] = PL011_getc(UART0, true);
     }
-    
+
     ctx->gpr[ 0 ] = n;
 }
 
@@ -241,9 +243,10 @@ void sys_fork( ctx_t* ctx){
     //Copy accross stack
     memcpy((void*)(child->ctx.sp), (void*) (ctx->sp), process_size_stack_offset);
     //Return 0 to child
-    child->ctx.gpr[0] = 0; 
+    child->ctx.gpr[0] = 0;
     //Return child PID to parent
     ctx->gpr[0] = child->pid;
+    dispatch(ctx, current, child);
 }
 
 void sys_exit(ctx_t* ctx){
